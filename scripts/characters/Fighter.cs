@@ -1,13 +1,22 @@
 using Godot;
 
 // Inheritance: Fighter gets Speed, Gravity, Health, Move(), TakeDamage()
-// all for free from Character, and adds punching on top
+// all for free from Character, and adds attacking on top
 public partial class Fighter : Character
 {
+	[Export] public int PlayerNumber = 1;
+
+	// Polymorphism: subclasses override these to use their own controls and animations
+	protected virtual string InputPrefix => PlayerNumber == 1 ? "p1" : "p2";
+	protected virtual string Attack1Action => InputPrefix + "_punch";
+	protected virtual string Attack2Action => InputPrefix + "_punch2";
+	protected virtual string Attack1Anim => "attack1";
+	protected virtual string Attack2Anim => "attack2";
+
 	private bool _isAttacking = false;
 	private float _attackTimer = 0f;
 	private const float AttackDuration = 0.25f;
-	private string _currentAttackAnim = "attack1";
+	private float _hitFlashTimer = 0f;
 
 	private Area2D _attackArea;
 
@@ -28,22 +37,24 @@ public partial class Fighter : Character
 		if (!IsOnFloor())
 			velocity.Y += Gravity * dt;
 
-		float moveInput = 0f;
-		if (Input.IsActionPressed("p1_left")) moveInput -= 1;
-		if (Input.IsActionPressed("p1_right")) moveInput += 1;
+		string prefix = InputPrefix;
 
-		bool jumpPressed = Input.IsActionJustPressed("p1_jump");
-		bool punchPressed = Input.IsActionJustPressed("p1_punch");
-		bool punch2Pressed = Input.IsActionJustPressed("p1_punch2");
+		float moveInput = 0f;
+		if (Input.IsActionPressed(prefix + "_left")) moveInput -= 1;
+		if (Input.IsActionPressed(prefix + "_right")) moveInput += 1;
+
+		bool jumpPressed = Input.IsActionJustPressed(prefix + "_jump");
+		bool punchPressed = Input.IsActionJustPressed(Attack1Action);
+		bool punch2Pressed = Input.IsActionJustPressed(Attack2Action);
 
 		if (!_isAttacking)
 		{
 			Move(moveInput, jumpPressed, ref velocity);
 
 			if (punchPressed)
-				StartAttack("attack1");
+				StartAttack(Attack1Anim);
 			else if (punch2Pressed)
-				StartAttack("attack2");
+				StartAttack(Attack2Anim);
 		}
 		else
 		{
@@ -59,22 +70,32 @@ public partial class Fighter : Character
 			if (_attackTimer <= 0)
 				EndAttack();
 		}
+
+		UpdateHitFlash(dt);
+	}
+
+	protected void UpdateHitFlash(float dt)
+	{
+		if (_hitFlashTimer > 0)
+		{
+			_hitFlashTimer -= dt;
+			if (_hitFlashTimer <= 0 && !_isAttacking)
+				_sprite.Modulate = Colors.White;
+		}
 	}
 
 	private void StartAttack(string animationName)
 	{
 		_isAttacking = true;
 		_attackTimer = AttackDuration;
-		_currentAttackAnim = animationName;
 
 		_attackArea.Monitoring = true;
-		_attackArea.GetNode<CollisionShape2D>("CollisionShape2D").Disabled = false;
-
 		var shape = _attackArea.GetNode<CollisionShape2D>("CollisionShape2D");
+		shape.Disabled = false;
 		shape.Position = new Vector2(_facingRight ? 30 : -30, 0);
 
-		_sprite.Play(_currentAttackAnim);
-		_sprite.Modulate = Colors.Red;
+		_sprite.Play(animationName);
+		_sprite.Modulate = Colors.Yellow;
 	}
 
 	private void EndAttack()
@@ -98,5 +119,6 @@ public partial class Fighter : Character
 	{
 		base.TakeDamage(amount);
 		_sprite.Modulate = Colors.Red;
+		_hitFlashTimer = 0.15f;
 	}
 }
